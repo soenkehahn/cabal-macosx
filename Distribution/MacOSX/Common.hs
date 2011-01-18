@@ -2,6 +2,7 @@ module Distribution.MacOSX.Common where
 
 import Data.List
 import System.FilePath
+import System.Directory
 
 -- | Mac OSX application information.
 data MacApp = MacApp {
@@ -118,3 +119,30 @@ pathInApp app p
     in "Contents/Resources" </> p'
   | otherwise = "Contents/Frameworks" </> relP
   where relP = makeRelative "/" p
+
+-- | looks up a library, if the given path is not already absolute.
+lookupLibrary :: FilePath -> IO FilePath
+lookupLibrary p =
+    if isAbsolute p then
+        return p
+      else do
+         mAbsPath <- searchInPaths macLibraryPaths p
+         return $ case mAbsPath of
+            Nothing -> error ("cannot find dependency: " ++ p)
+            Just absPath -> absPath
+  where
+    searchInPaths :: [FilePath] -> FilePath -> IO (Maybe FilePath)
+    searchInPaths [] _ = return Nothing
+    searchInPaths (a : r) file = do
+        exists <- doesFileExist (a </> file)
+        if exists then
+            return $ Just (a </> file)
+          else
+            searchInPaths r file
+
+-- | standard paths where libraries are looked up
+macLibraryPaths :: [FilePath]
+macLibraryPaths =
+    "/Library/Frameworks" :
+    "/System/Frameworks" :
+    []

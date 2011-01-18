@@ -142,13 +142,14 @@ getFDeps ::
   -> Exclusions -- ^ List of exclusions for dependency chasing.
   -> IO FDeps
 getFDeps appPath app path exclusions =
-  do contents <- readProcess oTool ["-L", absPath] ""
+  do absPath <- getAbsPath
+     contents <- readProcess oTool ["-L", absPath] ""
      case parse parseFileDeps "" contents of
        Left err -> error $ show err
        Right fDeps -> return $ exclude exclusions fDeps
-  where absPath = if path == appName app then
-                    appPath </> pathInApp app (appName app)
-                  else path
+  where getAbsPath = if path == appName app then
+                    return (appPath </> pathInApp app (appName app))
+                  else lookupLibrary path
         parseFileDeps :: Parser FDeps
         parseFileDeps = do f <- manyTill (noneOf ":") (char ':')
                            _ <- char '\n'
@@ -189,7 +190,8 @@ copyInDependency appPath app (FDeps src _) =
   Control.Monad.unless (src == appName app) $
          do putStrLn $ "Copying " ++ src ++ " to " ++ tgt
             createDirectoryIfMissing True $ takeDirectory tgt
-            copyFile src tgt
+            absSrc <- lookupLibrary src
+            copyFile absSrc tgt
     where tgt = appPath </> pathInApp app src
 
 -- | Update some object file's library dependencies to point to
