@@ -91,11 +91,18 @@ appDependencyGraph appPath app =
     ChaseWithDefaults -> appDependencyGraph appPath app {
                            appDeps = ChaseWith defaultExclusions
                          }
-    ChaseWith xs -> do putStrLn "Building dependency graph"
-                       buildDependencyGraph appPath app dgInitial roots [] xs
+    ChaseWith xs -> appDependencyGraph appPath app {
+                       appDeps = FilterDeps $ checkExclude xs
+                      }
     DoNotChase -> return dgInitial
+    FilterDeps f -> do
+        putStrLn "Building dependency graph"
+        buildDependencyGraph appPath app dgInitial roots [] f
   where roots = appName app : otherBins app
         dgInitial = dgEmpty `dgAddPaths` roots
+        checkExclude :: Exclusions -> FilePath -> Bool
+        checkExclude excls f = not $ any (`isInfixOf` f) excls
+
 
 -- | Recursive dependency-graph builder.
 buildDependencyGraph ::
@@ -106,14 +113,14 @@ buildDependencyGraph ::
                 -- dependencies.
   -> [FilePath] -- ^ List of paths of object files which have already
                 -- been dealt with.
-  -> Exclusions -- ^ List of exclusions for dependency-chasing.
+  -> DepsFilter -- ^ filter function for dependency-chasing.
   -> IO DG
 buildDependencyGraph _ _ dg [] _ _ = return dg
-buildDependencyGraph appPath app dg (x:xs) done excls =
-  do (dg', tgts) <- addFilesDependencies appPath app dg x excls
+buildDependencyGraph appPath app dg (x:xs) done fil =
+  do (dg', tgts) <- addFilesDependencies appPath app dg x fil
      let done' = (x:done)
          xs'   = addToQueue xs done' tgts
-     buildDependencyGraph appPath app dg' xs' done' excls
+     buildDependencyGraph appPath app dg' xs' done' fil
   where addToQueue :: [FilePath] -> [FilePath] -> [FilePath] -> [FilePath]
         addToQueue q done' = foldl (addOneToQueue (q ++ done')) q
         addOneToQueue :: [FilePath] -> [FilePath] -> FilePath -> [FilePath]
@@ -126,10 +133,10 @@ addFilesDependencies ::
   -> MacApp
   -> DG -- ^ Dependency graph to be extended.
   -> FilePath -- ^ Path to object file to be examined for dependencies.
-  -> Exclusions -- ^ List of exclusions for dependency chasing.
+  -> DepsFilter -- ^ filter function for dependency chasing.
   -> IO (DG, [FilePath])
-addFilesDependencies appPath app dg p excls =
-  do (FDeps _ tgts) <- getFDeps appPath app p excls
+addFilesDependencies appPath app dg p fil =
+  do (FDeps _ tgts) <- getFDeps appPath app p fil
      let dg' = dgAddFDeps dg (FDeps p tgts)
      return (dg', tgts)
 
@@ -139,14 +146,14 @@ getFDeps ::
   FilePath -- ^ Path to application bundle root.
   -> MacApp
   -> FilePath -- ^ Path to object file to be examined for dependencies.
-  -> Exclusions -- ^ List of exclusions for dependency chasing.
+  -> DepsFilter -- ^ filter function for dependency chasing.
   -> IO FDeps
-getFDeps appPath app path exclusions =
+getFDeps appPath app path fil =
   do absPath <- getAbsPath
      contents <- readProcess oTool ["-L", absPath] ""
      case parse parseFileDeps "" contents of
        Left err -> error $ show err
-       Right fDeps -> return $ exclude exclusions fDeps
+       Right fDeps -> return $ exclude fil fDeps
   where getAbsPath = if path == appName app then
                     return (appPath </> pathInApp app (appName app))
                   else lookupLibrary path
@@ -172,12 +179,11 @@ getFDeps appPath app path exclusions =
                       _ <- manyTill (noneOf ")") (char ')')
                       return dep
 
--- | Apply an exclusion list to an 'FDeps' value; any dependencies
--- which contain any of the exclusions as substrings are excluded.
-exclude :: Exclusions -> FDeps -> FDeps
-exclude excls (FDeps p ds) = FDeps p $ filter checkExclude ds
-  where checkExclude :: FilePath -> Bool
-        checkExclude f = not $ any (`isInfixOf` f) excls
+-- | Apply a filter function to an 'FDeps' value; any dependencies
+-- for which the filter function returns False are excluded.
+exclude :: DepsFilter -> FDeps -> FDeps
+exclude fil (FDeps p ds) =
+    FDeps p $ filter fil ds
 
 -- | Copy some object file's library dependencies into the application
 -- bundle.

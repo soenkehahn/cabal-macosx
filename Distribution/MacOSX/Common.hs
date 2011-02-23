@@ -46,7 +46,7 @@ data MacApp = MacApp {
   -- | Controls inclusion of library dependencies for executable and
   -- 'otherBins'; see below.
   appDeps :: ChaseDeps
-  } deriving (Eq, Show)
+  }
 
 -- | Application bundles may carry their own copies of shared
 -- libraries, which enables distribution of applications which 'just
@@ -89,12 +89,19 @@ data ChaseDeps
     -- rather, is to allow extension of the default list, which can be
     -- accessed via 'defaultExclusions'.
   | ChaseWith Exclusions
-    deriving (Eq, Show)
+    -- | Filter the dependencies by the given function. Includes dependencies
+    -- (and follows them recursively), if the given function returns True
+    -- when given the FilePath of the dependency.
+    -- Implemented to give you full control over dependecy chasing.
+  | FilterDeps DepsFilter
 
 -- | A list of exclusions to dependency chasing.  Any library whose
 -- path contains any exclusion string /as a substring/ will be
 -- excluded when chasing dependencies.
 type Exclusions = [String]
+
+-- | Filtering function for dependency chasing.
+type DepsFilter = FilePath -> Bool
 
 -- | Default list of exclusions; excludes OSX standard frameworks,
 -- libgcc, etc. - basically things which we would expect to be present
