@@ -226,7 +226,11 @@ updateDependency appPath app src tgt =
      --putStrLn cmd
      ExitSuccess <- system cmd
      return ()
-  where tgt' = "@executable_path/../Frameworks/" </> makeRelative "/" tgt
+  where origBin = makeRelative (appPath </> "Contents/Resources") newLib
+        rels = if origBin `elem` otherBins app || "/" ++ origBin `elem` otherBins app
+               then concatMap (const "../") (splitPath origBin)
+               else "../"
+        tgt' = "@executable_path/" ++ rels ++ "Frameworks/" </> makeRelative "/" tgt
         newLib = appPath </> pathInApp app src
 
 -- | Path to @otool@ tool.
