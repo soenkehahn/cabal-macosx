@@ -11,6 +11,11 @@ data MacApp = MacApp {
   -- @dist\/build\//appName/.app@, and the executable /appName/ will
   -- be copied to @Contents\/MacOSX\/@ in the bundle.
   appName :: String,
+  -- | additional compiled executables that will be placed in the same
+  -- directory as the main executable. Dependency chasing will also be
+  -- done for these. (The difference to otherBins is just the location
+  -- in the app bundle.)
+  otherCompiledBins :: [String],
   -- | Path to icon file, to be copied to @Contents\/Resources\/@ in
   -- the app bundle.  If omitted, no icon will be used.
   appIcon :: Maybe FilePath,
@@ -114,10 +119,13 @@ defaultExclusions =
    "/libobjc."
   ]
 
+isRoot :: MacApp -> FilePath -> Bool
+isRoot app path = path == appName app || path `elem` otherCompiledBins app
+
 -- | Compute item's path relative to app bundle root.
 pathInApp :: MacApp -> FilePath -> FilePath
 pathInApp app p
-  | p == appName app = "Contents/MacOS" </> p
+  | isRoot app p = "Contents/MacOS" </> p
   | p `elem` otherBins app = "Contents/Resources" </> relP
   | p `elem` resources app = 
     let p' = if "resources/" `isPrefixOf` p then
