@@ -53,7 +53,7 @@ appBundleBuildHook apps _ _ pkg localb =
       where apps' = case apps of
                       [] -> map mkDefault $ executables pkg
                       xs -> xs
-            mkDefault x = MacApp (exeName x) [] Nothing Nothing [] [] DoNotChase
+            mkDefault x = MacApp (exeName x) Nothing Nothing [] [] DoNotChase
     _ -> putStrLn "Not OS X, so not building an application bundle."
 
 -- | Given a 'MacApp' in context, make an application bundle in the
@@ -77,15 +77,14 @@ createAppDir :: LocalBuildInfo -> MacApp -> IO FilePath
 createAppDir localb app =
   do putStrLn $ "Creating application bundle directory " ++ appPath
      createDirectoryIfMissing False appPath
-     createDirectoryIfMissing True  $ takeDirectory (exeDest (appName app))
+     createDirectoryIfMissing True  $ takeDirectory exeDest
      createDirectoryIfMissing True  $ appPath </> "Contents/Resources"
-     forM_ (appName app : otherCompiledBins app) $ \ executableName -> do
-         putStrLn $ "Copying executable " ++ executableName ++ " into place"
-         copyFile (exeSrc executableName) (exeDest executableName)
+     putStrLn $ "Copying executable " ++ appName app ++ " into place"
+     copyFile exeSrc exeDest
      return appPath
   where appPath = buildDir localb </> appName app <.> "app"
-        exeDest name = appPath </> pathInApp app name
-        exeSrc name = buildDir localb </> name </> name
+        exeDest = appPath </> pathInApp app (appName app)
+        exeSrc = buildDir localb </> appName app </> appName app
 
 -- | Include any external resources specified.
 includeResources ::

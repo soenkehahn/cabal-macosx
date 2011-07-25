@@ -98,7 +98,7 @@ appDependencyGraph appPath app =
     FilterDeps f -> do
         putStrLn "Building dependency graph"
         buildDependencyGraph appPath app dgInitial roots [] f
-  where roots = appName app : otherCompiledBins app ++ otherBins app
+  where roots = appName app : otherBins app
         dgInitial = dgEmpty `dgAddPaths` roots
         checkExclude :: Exclusions -> FilePath -> Bool
         checkExclude excls f = not $ any (`isInfixOf` f) excls
@@ -154,8 +154,8 @@ getFDeps appPath app path fil =
      case parse parseFileDeps "" contents of
        Left err -> error $ show err
        Right fDeps -> return $ exclude fil fDeps
-  where getAbsPath = if isRoot app path then
-                    return (appPath </> pathInApp app path)
+  where getAbsPath = if path == appName app then
+                    return (appPath </> pathInApp app (appName app))
                   else lookupLibrary path
         parseFileDeps :: Parser FDeps
         parseFileDeps = do f <- manyTill (noneOf ":") (char ':')
@@ -193,7 +193,7 @@ copyInDependency ::
   -> FDeps -- ^ Dependencies to copy in.
   -> IO ()
 copyInDependency appPath app (FDeps src _) =
-  Control.Monad.unless (isRoot app src) $
+  Control.Monad.unless (src == appName app) $
          do putStrLn $ "Copying " ++ src ++ " to " ++ tgt
             createDirectoryIfMissing True $ takeDirectory tgt
             absSrc <- lookupLibrary src
